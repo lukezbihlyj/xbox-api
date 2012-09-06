@@ -86,18 +86,20 @@ class Base {
     }
     
     public function output_error($code) {
+        $payload = array(
+            "status" => "error",
+            "version" => $this->version,
+            "data" => array(
+                "code" => $code,
+                "message" => $this->errors[$code]
+            ),
+            "runtime" => round(microtime(true) - $this->runtime, 3) 
+        );
+        
         if($this->format == "xml") {
-            return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<xbox status=\"error\" version=\"" . $this->version . "\">\n    <code>" . $code . "</code>\n    <message>" . $this->errors[$code] . "</message>\n    <runtime>" . round(microtime(true) - $this->runtime, 3) . "</runtime>\n</xbox>";
+            return output_pretty_xml($payload);
         } else if($this->format == "json") {
-            return output_pretty_json(json_encode(array(
-                "status" => "error",
-                "version" => $this->version,
-                "data" => array(
-                    "code" => $code,
-                    "message" => $this->errors[$code]
-                ),
-                "runtime" => round(microtime(true) - $this->runtime, 3) 
-            )));
+            return output_pretty_json(json_encode($payload));
         }
         
         return false;
@@ -423,7 +425,7 @@ function output_pretty_json($json) {
  */
 function output_pretty_xml($mixed, $xml = false) {
     if($xml === false) {
-        $xml = new SimpleXMLElement('<?xml version="1.0" encoding="utf-8"?><xbox status="success" version="' . $mixed['version'] . '" />');
+        $xml = new SimpleXMLElement("<?xml version=\"1.0\" encoding=\"utf-8\"?><xbox status=\"" . $mixed['status'] . "\" version=\"" . $mixed['version'] . "\" />");
     }
     
     foreach($mixed as $key => $value) {
