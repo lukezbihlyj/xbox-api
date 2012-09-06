@@ -1,2 +1,4 @@
-xbox-api
+Xbox API
 ========
+
+Documentation coming soon... I promise.
