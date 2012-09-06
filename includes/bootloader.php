@@ -12,8 +12,8 @@ define(CACHE_ENGINE, "apc");
 /*!
  * Define the account details.
  */
-define(XBOX_EMAIL, "email");
-define(XBOX_PASSWORD, "password");
+define(XBOX_EMAIL, "");
+define(XBOX_PASSWORD, "");
 
 /*!
  * Define some log file locations.

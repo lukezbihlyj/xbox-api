@@ -68,11 +68,18 @@ class Base {
         header("Content-Type: application/" . $this->format . "; charset=utf-8");
     }
     
-    public function output_payload($payload) {
+    public function output_payload($data) {
+        $payload = array(
+            "status" => "success",
+            "version" => $this->version,
+            "data" => $data,
+            "runtime" => round(microtime(true) - $this->runtime, 3) 
+        );
+        
         if($this->format == "xml") {
-            return false;
+            return output_pretty_xml($payload);
         } else if($this->format == "json") {
-            return false;
+            return output_pretty_json(json_encode($payload));
         }
         
         return false;
@@ -82,7 +89,15 @@ class Base {
         if($this->format == "xml") {
             return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<xbox status=\"error\" version=\"" . $this->version . "\">\n    <code>" . $code . "</code>\n    <message>" . $this->errors[$code] . "</message>\n    <runtime>" . round(microtime(true) - $this->runtime, 3) . "</runtime>\n</xbox>";
         } else if($this->format == "json") {
-            return "{\n    \"version\": \"" . $this->version . "\",\n    \"status\": \"error\",\n    \"result\": {\n        \"code\": " . $code . ",\n        \"message\": \"" . $this->errors[$code] . "\"\n    },\n    \"runtime\": " . round(microtime(true) - $this->runtime, 3) . "\n}";
+            return output_pretty_json(json_encode(array(
+                "status" => "error",
+                "version" => $this->version,
+                "data" => array(
+                    "code" => $code,
+                    "message" => $this->errors[$code]
+                ),
+                "runtime" => round(microtime(true) - $this->runtime, 3) 
+            )));
         }
         
         return false;
@@ -90,7 +105,7 @@ class Base {
     
     /*!
      * ===
-     * protected functions
+     * Protected functions
      * ===
      */
     
@@ -123,7 +138,7 @@ class Base {
             $this->add_cookie(".login.live.com", "WLOpt", "act=[1]", time() + (60*60*24*365));
             $this->add_cookie(".login.live.com", "CkTst", "G" . time(), "/", time() + (60*60*24*365));
             
-            $url = $this->find($result, "srf_uPost='", "';");
+            $url = $this->find($result, "urlPost:'", "',");
             $PPFT = $this->find($result, "name=\"PPFT\" id=\"i0327\" value=\"", "\"");
             $PPSX = $this->find($result, "srf_sRBlob='", "';");
             
@@ -131,7 +146,7 @@ class Base {
             //$pwd_pad = substr($pwd_pad, 0, -(strlen($this->password))); // This was removed in May, 2011 or so. Quite liked it, actually.
             
             $post_data = "login=" . $this->email . "&passwd=" . $this->password . "&KMSI=1&mest=0&type=11&LoginOptions=3&PPSX=" . $PPSX . "&PPFT=" . $PPFT . "&idsbho=1&PwdPad=&sso=&i1=1&i2=1&i3=12035&i12=1&i13=1&i14=323&i15=3762&i18=__Login_Strings%7C1%2C__Login_Core%7C1%2C";
-            $result = $this->fetch_url($url, "https://login.live.com/login.srf/", null, $post_data);
+            $result = $this->fetch_url($url, "https://login.live.com/login.srf", null, $post_data);
             
             $this->stack_trace[] = array(
                 "url" => $url,
@@ -159,23 +174,6 @@ class Base {
                 "result" => $result
             );
             
-            $url = $this->find($result, "id=\"fmHF\" action=\"", "\"");
-            $NAP = $this->find($result, "id=\"NAP\" value=\"", "\"");
-            $ANON = $this->find($result, "id=\"ANON\" value=\"", "\"");
-            $t = $this->find($result, "id=\"t\" value=\"", "\"");
-            
-            $this->add_cookie(".xbox.com", "ANON", $ANON, "/", time() + (60*60*24*365));
-            $this->add_cookie(".xbox.com", "NAP", $NAP, "/", time() + (60*60*24*365));
-            
-            $post_data = "NAPExp=" . date("c", mktime(date("H"), date("i"), date("s"), date("n") + 1)) . "&NAP=" . $NAP . "&ANONExp=" . date("c", mktime(date("H"), date("i"), date("s"), date("n") + 1)) . "&ANON=" . $ANON . "&t=" . $t;
-            $result = $this->fetch_url($url, "", 16, $post_data);
-            
-            $this->stack_trace[] = array(
-                "url" => $url,
-                "post_data" => $post_data,
-                "result" => $result
-            );
-        
             $result = $this->fetch_url("http://www.xbox.com/en-US/");
             
             if(stripos($result, "currentUser.isSignedIn = true") !== false) {
@@ -292,7 +290,7 @@ class Base {
             $result = $this->fetch_url($follow, $url, null, $post);
             $result = $this->fetch_url($url, $referer, $timeout, $post_data, $headers);
         } else {
-            $this->save_to_debug("Loaded page: " . $url);
+            $this->save_to_debug("Loaded URL: " . $url);
         }
         
         if(!$result) {
@@ -372,6 +370,81 @@ function array_filter_recursive($input) {
     }
     
     return array_filter($input); 
+}
+
+/*!
+ * See: http://recursive-design.com/blog/2008/03/11/format-json-with-php/
+ */
+function output_pretty_json($json) {
+    $result = "";
+    $pos = 0;
+    $strLen = strlen($json);
+    $indentStr = "    ";
+    $newLine = "\n";
+    $prevChar = "";
+    $outOfQuotes = true;
+    
+    for($i = 0; $i <= $strLen; $i++) {
+        $char = substr($json, $i, 1);
+        if($char == '"' && $prevChar != '\\') {
+            $outOfQuotes = !$outOfQuotes;
+        } else if(($char == '}' || $char == ']') && $outOfQuotes) {
+            $result .= $newLine;
+            $pos--;
+            for($j = 0; $j < $pos; $j++) {
+                $result .= $indentStr;
+            }
+        }
+        
+        $result .= $char;
+        
+        if(($char == ',' || $char == '{' || $char == '[') && $outOfQuotes) {
+            $result .= $newLine;
+            
+            if($char == '{' || $char == '[') {
+                $pos++;
+            }
+            
+            for($j = 0; $j < $pos; $j++) {
+                $result .= $indentStr;
+            }
+        } else if($char == ":") {
+            $result .= " ";
+        }
+        
+        $prevChar = $char;
+    }
+    
+    return $result;
+}
+
+/*!
+ * See: http://stackoverflow.com/questions/1397036/how-to-convert-array-to-simplexml
+ */
+function output_pretty_xml($mixed, $xml = false) {
+    if($xml === false) {
+        $xml = new SimpleXMLElement('<?xml version="1.0" encoding="utf-8"?><xbox status="success" version="' . $mixed['version'] . '" />');
+    }
+    
+    foreach($mixed as $key => $value) {
+        if(is_numeric($key)) {
+            $key = rtrim($xml->getName(), "s");
+        }
+        
+        if(is_array($value)) {
+            output_pretty_xml($value, $xml->addChild($key));
+        } else {
+            $xml->addChild($key, $value);
+        }
+    }
+    
+    $dom = dom_import_simplexml($xml)->ownerDocument;
+    $dom->preserveWhiteSpace = false;
+    $dom->formatOutput = true;
+    
+    return preg_replace_callback('/^( +)</m', function($a) { 
+        return str_repeat(' ', intval(strlen($a[1]) / 2) * 4) . "<";  
+    }, $dom->saveXML());
 }
 
 ?>
